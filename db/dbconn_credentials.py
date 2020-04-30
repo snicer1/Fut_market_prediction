@@ -1,0 +1,5 @@
+username = 'postgres'
+password = 'postgres'
+host = 'localhost'
+port = '5432'
+db_name = 'fut_market_prediction'
