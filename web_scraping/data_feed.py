@@ -5,30 +5,9 @@ from sqlalchemy.orm import Query, Session
 from sqlalchemy.orm.exc import NoResultFound
 
 class PlayerFeed():
-    def __init__(self, session: Session, domain: str, version: int):
-        self._session = session
+    def __init__(self, domain: str, version: int):
         self.domain = domain
         self.version = version
-
-    @staticmethod
-    def format_ingredient(
-            id: int,
-            name: str,
-            carbs: float,
-            protein: float,
-            fat: float,
-            kcal: int,
-    ) -> Dict[str, Any]:
-        ingredient = {
-            "id": id,
-            "name": name,
-            "carbs": carbs,
-            "protein": protein,
-            "fat": fat,
-            "kcal": kcal,
-        }
-        return ingredient
-
 
     def full_refeed(self):
         page_number_max = 1
@@ -44,6 +23,7 @@ class PlayerFeed():
                 futbin_id = int(player['href'].split("/")[-2])
                 name = player.text
                 url = self.domain + player['href']
+                print(url)
                 self.get_players_stat(url)
             i -= 1
         return player
