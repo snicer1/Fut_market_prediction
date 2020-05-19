@@ -10,9 +10,10 @@ metadata = Base.metadata
 
 class Player(Base):
     __tablename__ = 'player'
-    futbin_id = Column("futbin_id", Integer, primary_key=True)
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    futbin_id = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
-    player_id = Column(Integer, nullable=False, unique=True)
+    player_id = Column(Integer, nullable=False)
     position = Column(String, nullable=False)
     age = Column(Integer, nullable=False)
     club = Column(String, nullable=False)
@@ -34,7 +35,7 @@ class Player(Base):
 class Player_stat(Base):
     __tablename__ = 'player_stat'
     id = Column("id", Integer, primary_key=True, autoincrement=True)
-    futbin_id = Column(Integer, ForeignKey("player.futbin_id"))
+    futbin_id = Column(Integer, nullable=False)
     pace = Column(Integer, nullable=False)
     pace_acceleration = Column(Integer, nullable=False)
     pace_sprintspeed = Column(Integer, nullable=False)

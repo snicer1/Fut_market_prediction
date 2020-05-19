@@ -1,17 +1,24 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Any, Dict, List
-from sqlalchemy.orm import Query, Session
-from sqlalchemy.orm.exc import NoResultFound
+from typing import Any, Dict
+from sqlalchemy.orm import Session
+from datetime import datetime
 
 from sqlalchemy import exc
 from market_prediction import models
+from web_scraping import proxy_changer
 
 class PlayerFeed():
     def __init__(self, session: Session, domain: str, version: int):
         self._session = session
         self.domain = domain
         self.version = version
+        self.headers = {'Accept-Encoding': 'gzip, deflate, sdch',
+                        'Accept-Language': 'en-US,en;q=0.8',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Referer': 'http://www.wikipedia.org/',
+                        'Connection': 'keep-alive',}
 
     @staticmethod
     def format_player(
@@ -44,34 +51,86 @@ class PlayerFeed():
                   }
         return player_stats
 
+    def get_number_of_sites(self):
+        page_number_max = 1
+        url = f"{self.domain}/{self.version}/players"
+
+        try:
+            r = requests.request(method='get', url=url,  headers=self.headers, timeout=8)
+            html_soup = BeautifulSoup(r.text, 'html.parser')
+            pages = html_soup.find_all('li', class_="page-item")
+        except:
+            print("Cannot find page_number_max")
+
+        list_element = []
+
+        for item in pages:
+            list_element.append(item.text.replace("\n", ""))
+
+        try:
+            page_number_max = int(list_element[-2])
+        except:
+            print("Cannot find page_number_max")
+
+        return page_number_max
+
     def full_refeed(self):
-        page_number_max = 35
+
+        try:
+            self._session.execute(models.Player_stat.__table__.delete())
+            self._session.execute(models.Player.__table__.delete())
+            self._session.commit()
+        except exc.SQLAlchemyError as e:
+            error = str(e.__dict__['orig'])
+            print(error)
+
+        proxy_handler = proxy_changer.Proxy_changer()
+        proxies = proxy_handler.change_notworking_proxy()
+        page_number_max = 110
         i = page_number_max
         player = []
         player_stat = []
         while (i != 0):
+            print(f"I AM ON PAGE {i}")
+            start_time = datetime.now()
+
             url = f'{self.domain}/{self.version}/players?page={i}'
-            response = requests.get(url, headers={'Cache-Control': 'no-cache'})
-            html_soup = BeautifulSoup(response.text, 'html.parser')
-            players_container = html_soup.find_all('a', class_='player_name_players_table')
+            players_container = []
+            while players_container is None or len(players_container) == 0:
+                try:
+                    r = requests.request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                    html_soup = BeautifulSoup(r.text, 'html.parser')
+                    players_container = html_soup.find_all('a', class_='player_name_players_table')
+                except:
+                    proxies = proxy_handler.change_notworking_proxy(proxies)
+                    continue
+
             for elem in players_container:
                 futbin_id = int(elem['href'].split("/")[-2])
                 name = elem.text
                 url = self.domain + elem['href']
-                response = requests.get(url, headers={'Cache-Control': 'no-cache'})
-                html_soup = BeautifulSoup(response.text, 'html.parser')
-                if len(self.get_players_info(html_soup, futbin_id, name)) > 0:
-                    player.append(self.get_players_info(html_soup, futbin_id, name))
-                else:
-                    continue
-                if len(self.get_players_stats(html_soup,futbin_id)) > 0:
-                    player_stat.append(self.get_players_stats(html_soup,futbin_id))
+                info_content = []
+                while info_content is None or len(info_content) == 0:
+                    try:
+                        r = requests.request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                        html_soup = BeautifulSoup(r.text, 'html.parser')
+                        info_content = html_soup.find('div', id='info_content')
+                    except:
+                        proxies = proxy_handler.change_notworking_proxy(proxies)
+                        continue
+
+                single_player_info = self.get_players_info(html_soup, futbin_id, name)
+                if len(single_player_info) > 0:
+                    player.append(single_player_info)
                 else:
                     continue
 
-            self._session.execute(models.Player_stat.__table__.delete())
-            self._session.execute(models.Player.__table__.delete())
-            self._session.commit()
+                single_player_stat = self.get_players_stats(html_soup,futbin_id)
+                if len(single_player_stat) > 0:
+                    player_stat.append(single_player_stat)
+                else:
+                    continue
+
 
             try:
                 self._session.execute(models.Player.__table__.insert(), player)
@@ -87,8 +146,11 @@ class PlayerFeed():
                 error = str(e.__dict__['orig'])
                 print(error)
 
+            time_elapsed = datetime.now() - start_time
+            print('Time of database insertion (hh:mm:ss.ms) {}'.format(time_elapsed))
+
             i -= 1
-        return player
+        return 1
 
     def get_players_info(self, html_soup, futbin_id, name):
         can_be_inserted = True
@@ -118,6 +180,7 @@ class PlayerFeed():
         added_on = temp_list_player_info[13]
 
         player = ''
+
         if position == 'GK':
             can_be_inserted = False
         if can_be_inserted == True:
