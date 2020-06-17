@@ -19,3 +19,5 @@ ENV DB_DB_NAME='fut_market_prediction'
 RUN pip install -r requirements.txt
 
 WORKDIR /app/fut_market_prediction/
+
+EXPOSE 8080
