@@ -48,7 +48,6 @@ class Proxy_changer():
 
     def change_notworking_proxy(self, actual_proxy=''):
 
-        print("Entry proxy " + str(actual_proxy))
         if len(self.list_of_proxies) == 0:
             self.get_new_list_of_proxies_sslproxies()
 
@@ -62,6 +61,5 @@ class Proxy_changer():
             "https": f"{new_proxy}",
         }
 
-        print("Output proxy " + str(proxies))
         return proxies
 

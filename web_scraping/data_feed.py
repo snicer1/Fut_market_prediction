@@ -1,8 +1,7 @@
-import requests
+from requests import request
 from bs4 import BeautifulSoup
 from typing import Any, Dict
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from sqlalchemy import exc
 from market_prediction import models
@@ -15,7 +14,7 @@ class PlayerFeed():
         self.version = version
         self.headers = {'Accept-Encoding': 'gzip, deflate, sdch',
                         'Accept-Language': 'en-US,en;q=0.8',
-                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36',
+                        'User-Agent': 'Mozilla/5.0',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                         'Referer': 'http://www.wikipedia.org/',
                         'Connection': 'keep-alive',}
@@ -56,7 +55,7 @@ class PlayerFeed():
         url = f"{self.domain}/{self.version}/players"
 
         try:
-            r = requests.request(method='get', url=url,  headers=self.headers, timeout=8)
+            r = request(method='get', url=url,  headers=self.headers, timeout=8)
             html_soup = BeautifulSoup(r.text, 'html.parser')
             pages = html_soup.find_all('li', class_="page-item")
         except:
@@ -74,8 +73,7 @@ class PlayerFeed():
 
         return page_number_max
 
-    def full_refeed(self):
-
+    def clean_tables(self):
         try:
             self._session.execute(models.Player_stat.__table__.delete())
             self._session.execute(models.Player.__table__.delete())
@@ -83,22 +81,29 @@ class PlayerFeed():
         except exc.SQLAlchemyError as e:
             error = str(e.__dict__['orig'])
             print(error)
+            return False
 
+        return True
+
+    def full_refeed(self, feed_site_from, feed_site_to):
         proxy_handler = proxy_changer.Proxy_changer()
         proxies = proxy_handler.change_notworking_proxy()
-        page_number_max = 110
-        i = page_number_max
-        player = []
-        player_stat = []
+        print(f'full_refeed in range: {feed_site_from}: {feed_site_to}')
+        i = (feed_site_to - feed_site_from) + 1
         while (i != 0):
-            print(f"I AM ON PAGE {i}")
-            start_time = datetime.now()
+            player = []
+            player_stat = []
+            # print(f"I AM ON PAGE {feed_site_to + 1 - i}")
+            # start_time = datetime.now()
 
-            url = f'{self.domain}/{self.version}/players?page={i}'
+            url = f'{self.domain}/{self.version}/players?page={feed_site_to + 1 - i}'
+
             players_container = []
             while players_container is None or len(players_container) == 0:
                 try:
-                    r = requests.request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                    r = request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                    if r.status_code == 403:
+                        raise Exception
                     html_soup = BeautifulSoup(r.text, 'html.parser')
                     players_container = html_soup.find_all('a', class_='player_name_players_table')
                 except:
@@ -112,7 +117,9 @@ class PlayerFeed():
                 info_content = []
                 while info_content is None or len(info_content) == 0:
                     try:
-                        r = requests.request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                        r = request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+                        if r.status_code == 403:
+                            raise Exception
                         html_soup = BeautifulSoup(r.text, 'html.parser')
                         info_content = html_soup.find('div', id='info_content')
                     except:
@@ -131,7 +138,6 @@ class PlayerFeed():
                 else:
                     continue
 
-
             try:
                 self._session.execute(models.Player.__table__.insert(), player)
                 self._session.commit()
@@ -146,10 +152,24 @@ class PlayerFeed():
                 error = str(e.__dict__['orig'])
                 print(error)
 
-            time_elapsed = datetime.now() - start_time
-            print('Time of database insertion (hh:mm:ss.ms) {}'.format(time_elapsed))
+            # time_elapsed = datetime.now() - start_time
+            # print('Time of database insertion (hh:mm:ss.ms) {}'.format(time_elapsed))
 
             i -= 1
+        return 1
+
+    def incremental_feed(self, date_refeed_from):
+        proxy_handler = proxy_changer.Proxy_changer()
+        proxies = proxy_handler.change_notworking_proxy()
+        url = f'{self.domain}/latest'
+        r = request(method='get', url=url, headers=self.headers, timeout=8)
+        html_soup = BeautifulSoup(r.text, 'html.parser')
+        players_container = html_soup.find('tr', class_='player_tr_1')
+        temp = players_container.find_all('td')
+        table_with_content = []
+        for elem in temp:
+            table_with_content.append(elem.text.strip())
+        print(table_with_content[-1])
         return 1
 
     def get_players_info(self, html_soup, futbin_id, name):
