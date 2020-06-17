@@ -20,8 +20,8 @@ logging.basicConfig(filename=f'log/fut_{time.strftime("%Y%m%d-%H%M%S")}.log',
 
 def full_refeed(processes_amount: int):
     feed.clean_tables()
-    # sites_amount = feed.get_number_of_sites()
-    sites_amount = 110
+    sites_amount = feed.get_number_of_sites()
+    #sites_amount = 110
     site_amount_per_process = sites_amount // processes_amount
     feed_site_from = 1
     feed_site_to = site_amount_per_process + sites_amount % processes_amount
