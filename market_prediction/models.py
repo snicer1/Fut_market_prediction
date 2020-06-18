@@ -72,6 +72,12 @@ class Player_stat(Base):
     physicality_strength = Column(Integer, nullable=False)
     physicality_aggression = Column(Integer, nullable=False)
 
+class Player_price(Base):
+    __tablename__ = 'player_price'
+    id = Column("id", Integer, primary_key=True, autoincrement=True)
+    player_id = Column(Integer, nullable=False)
+    price = Column(Integer, nullable=False)
+    date_price = Column(Date, nullable=False)
 
 metadata.create_all(engine)
 

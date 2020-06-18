@@ -14,14 +14,16 @@ version = 20
 
 if_full_refeed = False
 
+
 logging.basicConfig(filename=f'log/fut_{time.strftime("%Y%m%d-%H%M%S")}.log',
                     format='%(levelname)s %(asctime)s :: %(message)s',
                     level=logging.DEBUG)
 
-def full_refeed(processes_amount: int):
+def full_refeed(processes_amount):
+
     feed.clean_tables()
-    sites_amount = feed.get_number_of_sites()
-    #sites_amount = 110
+    # sites_amount = feed.get_number_of_sites()
+    sites_amount = 1
     site_amount_per_process = sites_amount // processes_amount
     feed_site_from = 1
     feed_site_to = site_amount_per_process + sites_amount % processes_amount
@@ -47,13 +49,15 @@ def incremental_feed():
 
 if __name__ == "__main__":
     feed = PlayerFeed(create_db_session(), domain, version)
-
+    print(sys.argv[1])
     if len(sys.argv) == 2:
         try:
             arg_processes_amount = int(sys.argv[1])
             if_full_refeed = True
         except:
             if_full_refeed = False
+
+
 
     if if_full_refeed == True:
         full_refeed(arg_processes_amount)

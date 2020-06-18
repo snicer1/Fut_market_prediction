@@ -2,7 +2,7 @@ from requests import request
 from bs4 import BeautifulSoup
 from typing import Any, Dict
 from sqlalchemy.orm import Session
-
+from datetime import datetime
 from sqlalchemy import exc
 from market_prediction import models
 from web_scraping import proxy_changer
@@ -50,6 +50,11 @@ class PlayerFeed():
                   }
         return player_stats
 
+    @staticmethod
+    def format_player_price(player_id: int, price: int, date_price: str,) -> Dict[str, Any]:
+        player_price = {"player_id": player_id, "price": price, "date_price": date_price}
+        return player_price
+
     def get_number_of_sites(self):
         page_number_max = 1
         url = f"{self.domain}/{self.version}/players"
@@ -93,6 +98,7 @@ class PlayerFeed():
         while (i != 0):
             player = []
             player_stat = []
+            player_prices = []
             # print(f"I AM ON PAGE {feed_site_to + 1 - i}")
             # start_time = datetime.now()
 
@@ -126,11 +132,22 @@ class PlayerFeed():
                         proxies = proxy_handler.change_notworking_proxy(proxies)
                         continue
 
-                single_player_info = self.get_players_info(html_soup, futbin_id, name)
+                single_player_info, player_id = self.get_players_info(html_soup, futbin_id, name)
                 if len(single_player_info) > 0:
                     player.append(single_player_info)
                 else:
                     continue
+
+                player_single_price = False
+
+                while not player_single_price:
+                    try:
+                        player_single_price = self.get_player_prices(player_id, proxies)
+                    except ValueError:
+                        proxies = proxy_handler.change_notworking_proxy(proxies)
+                        continue
+
+                player_prices += player_single_price
 
                 single_player_stat = self.get_players_stats(html_soup,futbin_id)
                 if len(single_player_stat) > 0:
@@ -138,8 +155,16 @@ class PlayerFeed():
                 else:
                     continue
 
+
             try:
                 self._session.execute(models.Player.__table__.insert(), player)
+                self._session.commit()
+            except exc.SQLAlchemyError as e:
+                error = str(e.__dict__['orig'])
+                print(error)
+
+            try:
+                self._session.execute(models.Player_price.__table__.insert(), player_prices)
                 self._session.commit()
             except exc.SQLAlchemyError as e:
                 error = str(e.__dict__['orig'])
@@ -208,7 +233,7 @@ class PlayerFeed():
                                     skills=skills, weak_foot=weak_foot, revision=revision, foot=foot, height=height, weight=weight, def_wr=def_wr, att_wr=att_wr, added_on=added_on
                                     )
 
-        return player
+        return player, player_id
 
     def get_players_stats(self, html_soup, futbin_id):
         can_be_inserted = True
@@ -243,3 +268,26 @@ class PlayerFeed():
                                                 , physicality_aggression = temp_list_player_stat[34])
 
         return player_stats
+
+    def get_player_prices(self, player_id, proxies):
+        player_price = []
+        url = f'{self.domain}/{self.version}/playerGraph?type=daily_graph&year=20&player={player_id}'
+        try:
+            r = request(method='get', url=url, proxies=proxies, headers=self.headers, timeout=8)
+            data = r.json()
+            if r.status_code == 403:
+                raise Exception
+        except:
+            raise ValueError
+
+        if len(data) == 0:
+            raise ValueError
+
+        for price in data['ps']:
+            # There is extra zeroes in response.
+            date = datetime.utcfromtimestamp(price[0] / 1000).strftime('%Y-%m-%d')
+            price = price[1]
+
+            player_price.append(self.format_player_price(player_id=player_id, price = price, date_price=date))
+
+        return player_price
